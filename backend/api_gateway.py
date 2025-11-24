@@ -97,6 +97,33 @@ def get_system_status():
     
     return jsonify(status)
 
+@app.route('/admin/kill-coordinator', methods=['POST'])
+def kill_coordinator():
+    try:
+        coord_url = os.getenv("COORDINATOR_URL", "http://localhost:6000")
+        requests.post(f"{coord_url}/simulate/kill", timeout=1)
+        return jsonify({"status": "SUCCESS", "message": "Primary Coordinator Killed"})
+    except:
+        return jsonify({"error": "Failed to reach coordinator"}), 500
+
+@app.route('/admin/simulate-lag', methods=['POST'])
+def simulate_lag():
+    try:
+        coord_url = os.getenv("COORDINATOR_URL", "http://localhost:6000")
+        requests.post(f"{coord_url}/simulate/lag", timeout=1)
+        return jsonify({"status": "SUCCESS", "message": "Network Lag Simulated"})
+    except:
+        return jsonify({"error": "Failed to reach coordinator"}), 500
+
+@app.route('/admin/reset-system', methods=['POST'])
+def reset_system():
+    try:
+        coord_url = os.getenv("COORDINATOR_URL", "http://localhost:6000")
+        requests.post(f"{coord_url}/simulate/reset", timeout=1)
+        return jsonify({"status": "SUCCESS", "message": "System Reset"})
+    except:
+        return jsonify({"error": "Failed to reach coordinator"}), 500
+
 # --- Auth Endpoints ---
 
 @app.route('/auth/login', methods=['POST'])

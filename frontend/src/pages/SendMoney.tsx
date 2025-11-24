@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, User, IndianRupee, CheckCircle, XCircle } from 'lucide-react';
 
 const SendMoney = () => {
     const [receiverId, setReceiverId] = useState('');
@@ -39,54 +39,83 @@ const SendMoney = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 p-4">
-            <button onClick={() => navigate('/dashboard')} className="flex items-center text-gray-600 mb-6 hover:text-gray-900">
-                <ArrowLeft size={20} className="mr-2" /> Back to Dashboard
-            </button>
-
-            <div className="max-w-md mx-auto bg-white rounded-xl shadow-md p-8">
-                <h2 className="text-2xl font-bold text-center text-purple-700 mb-6">Send Money</h2>
-
-                <form onSubmit={handlePayment} className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Receiver ID</label>
-                        <input
-                            type="text"
-                            value={receiverId}
-                            onChange={(e) => setReceiverId(e.target.value)}
-                            placeholder="e.g. USR456 or MERCHANT123"
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-                            required
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Amount (₹)</label>
-                        <input
-                            type="number"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder="0.00"
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500"
-                            required
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={status === 'PROCESSING'}
-                        className={`w-full py-3 px-4 rounded-md shadow-sm text-white font-bold transition
-              ${status === 'PROCESSING' ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
-                    >
-                        {status === 'PROCESSING' ? 'Processing...' : 'Pay Now'}
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+            <div className="bg-[#6739b7] p-6 pb-24 text-white shadow-lg">
+                <div className="container mx-auto max-w-md">
+                    <button onClick={() => navigate('/dashboard')} className="flex items-center text-purple-100 hover:text-white transition mb-4">
+                        <ArrowLeft size={20} className="mr-2" /> Back
                     </button>
-                </form>
+                    <h1 className="text-3xl font-bold">Send Money</h1>
+                    <p className="text-purple-200 mt-1">Securely transfer funds to anyone</p>
+                </div>
+            </div>
 
-                {status && status !== 'PROCESSING' && (
-                    <div className={`mt-6 p-4 rounded-lg text-center font-medium ${status === 'SUCCESS' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {status === 'SUCCESS' ? 'Payment Successful!' : status}
-                    </div>
-                )}
+            <div className="container mx-auto max-w-md -mt-16 px-4 flex-grow">
+                <div className="bg-white rounded-2xl shadow-xl p-8">
+                    <form onSubmit={handlePayment} className="space-y-8">
+
+                        {/* Receiver Input */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-600 uppercase tracking-wide">To</label>
+                            <div className="flex items-center border-b-2 border-gray-200 focus-within:border-[#6739b7] transition py-2">
+                                <User className="text-gray-400 mr-3" size={24} />
+                                <input
+                                    type="text"
+                                    value={receiverId}
+                                    onChange={(e) => setReceiverId(e.target.value)}
+                                    placeholder="Enter Receiver ID / Mobile"
+                                    className="flex-grow outline-none text-lg font-medium text-gray-800 placeholder-gray-300"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Amount Input */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-600 uppercase tracking-wide">Amount</label>
+                            <div className="flex items-center border-b-2 border-gray-200 focus-within:border-[#6739b7] transition py-2">
+                                <IndianRupee className="text-gray-400 mr-3" size={24} />
+                                <input
+                                    type="number"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    className="flex-grow outline-none text-3xl font-bold text-gray-800 placeholder-gray-300"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            disabled={status === 'PROCESSING'}
+                            className={`w-full py-4 rounded-xl text-white font-bold text-lg shadow-lg transition transform active:scale-95
+                                ${status === 'PROCESSING' ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#6739b7] hover:bg-[#5e35b1]'}`}
+                        >
+                            {status === 'PROCESSING' ? 'Processing Transaction...' : 'Pay Now'}
+                        </button>
+                    </form>
+
+                    {/* Status Messages */}
+                    {status && status !== 'PROCESSING' && (
+                        <div className={`mt-8 p-6 rounded-xl flex flex-col items-center justify-center text-center animate-fade-in ${status === 'SUCCESS' ? 'bg-green-50' : 'bg-red-50'}`}>
+                            {status === 'SUCCESS' ? (
+                                <>
+                                    <CheckCircle size={48} className="text-green-500 mb-2" />
+                                    <h3 className="text-xl font-bold text-green-800">Payment Successful!</h3>
+                                    <p className="text-green-600">Redirecting to dashboard...</p>
+                                </>
+                            ) : (
+                                <>
+                                    <XCircle size={48} className="text-red-500 mb-2" />
+                                    <h3 className="text-xl font-bold text-red-800">Payment Failed</h3>
+                                    <p className="text-red-600">{status}</p>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

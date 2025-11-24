@@ -150,6 +150,7 @@ services:
       API_SERVERS: '["http://payment_api_1:5001", "http://payment_api_2:5002"]'
       REDIS_HOST: redis
       LOGGING_SERVICE_URL: http://logging_service:7000/
+      WALLET_SERVICE_URL: http://wallet_service:6100
 
   # --- Workers ---
 

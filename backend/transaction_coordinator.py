@@ -28,6 +28,7 @@ ROLE = "primary" # or "backup"
 PEER_URL = "http://localhost:6001"
 PORT = 6000
 IS_ACTIVE = True # For simulating failure
+LAG_MS = 0 # For simulating network lag
 
 # --- Database Setup ---
 client = MongoClient(MONGO_URI)
@@ -77,6 +78,12 @@ def process_payment(data):
     sender_id = data['sender_id']
     receiver_id = data['receiver_id']
     amount = float(data['amount'])
+    
+    if not IS_ACTIVE:
+        return {"error": "Coordinator is down"}, 503
+        
+    if LAG_MS > 0:
+        time.sleep(LAG_MS / 1000.0)
     
     if logger: logger.log(f"Processing transaction {transaction_id}")
     
@@ -140,6 +147,8 @@ def process_payment(data):
 
 @app.route('/health', methods=['GET'])
 def health():
+    if not IS_ACTIVE:
+        return jsonify({"status": "OFFLINE", "role": ROLE}), 503
     return jsonify({"status": "ONLINE", "role": ROLE})
 
 @app.route('/heartbeat', methods=['POST'])
@@ -170,6 +179,25 @@ def get_status(transaction_id):
     if txn:
         return jsonify(txn)
     return jsonify({"error": "Transaction not found"}), 404
+
+@app.route('/simulate/kill', methods=['POST'])
+def simulate_kill():
+    global IS_ACTIVE
+    IS_ACTIVE = False
+    return jsonify({"status": "KILLED", "message": "Coordinator is now simulating failure"})
+
+@app.route('/simulate/lag', methods=['POST'])
+def simulate_lag():
+    global LAG_MS
+    LAG_MS = 2000 # 2 seconds lag
+    return jsonify({"status": "LAGGING", "message": "Network lag of 2s simulated"})
+
+@app.route('/simulate/reset', methods=['POST'])
+def simulate_reset():
+    global IS_ACTIVE, LAG_MS
+    IS_ACTIVE = True
+    LAG_MS = 0
+    return jsonify({"status": "RESET", "message": "System restored to normal"})
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
