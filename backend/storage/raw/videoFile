@@ -1,0 +1,62 @@
+Duplicate patient profiles are being created in two scenarios:
+
+1. Same mobile number, but name/other details differ
+
+Example:
+
+User registers mobile: 9876543210
+
+But enters name as "Rahul", next time "Rahool"
+→ Multiple profiles created (same mobile, different spellings)
+
+2. Same name + other details, but different mobile numbers
+
+Example:
+
+Patient’s name: "Rahul Sharma"
+
+Address/DOB same
+
+But mobile number is different (maybe someone else registered them earlier)
+→ Duplicate profiles again.
+
+Backend solution (3 APIs):
+
+API #1 → Mobile match API
+
+Returns all profiles with the same mobile number.
+
+API #2 → Fuzzy duplicate API
+
+Returns profiles with similar name/DOB/address even if mobile is different.
+
+API #3 → Merge API
+
+Takes multiple patient IDs.
+
+Merges selected duplicate profiles into ONE selected "main profile".
+
+⭐ Your UI Task
+
+Inside BookAppointmentClient, after selecting a patient from the first search table:
+
+Call API #1 → Search exact/mobile matches.
+
+If API #1 returns nothing → call API #2 (fuzzy).
+
+If either API returns duplicates →
+Below SearchedUserCard, show a new section:
+
+Possible Duplicate Profiles
+[Merge Selected] button
+TABLE: each duplicate with checkbox
+
+Also add a checkbox column to the original search results table (only that selected profile is pre-checked).
+
+When user clicks Merge Selected → open popup:
+
+Popup shows all selected profiles.
+
+Asks: “Which profile should be the main profile to merge into?”
+
+After user selects → call API #3.

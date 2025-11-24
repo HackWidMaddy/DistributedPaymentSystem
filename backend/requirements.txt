@@ -1,0 +1,7 @@
+Flask
+pymongo
+requests
+Flask-CORS
+redis
+kafka-python
+PyJWT

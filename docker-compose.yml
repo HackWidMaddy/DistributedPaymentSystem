@@ -1,0 +1,195 @@
+version: '3.8'
+
+services:
+  # --- Infrastructure ---
+  mongodb:
+    image: mongo:latest
+    container_name: payflow_mongo
+    ports:
+      - "28000:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:latest
+    container_name: payflow_redis
+    ports:
+      - "6379:6379"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: payflow_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: payflow_kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  # --- Backend Services ---
+
+  logging_service:
+    build: ./backend
+    container_name: payflow_logging
+    command: python logging_service.py
+    ports:
+      - "7000:7000"
+      - "7001:7001"
+
+  transaction_coordinator_primary:
+    build: ./backend
+    container_name: payflow_coordinator_primary
+    command: python transaction_coordinator.py --role primary --port 6000 --peer http://transaction_coordinator_backup:6001
+    ports:
+      - "6000:6000"
+    depends_on:
+      - mongodb
+      - kafka
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      WALLET_SERVICE_URL: http://wallet_service:6100
+      FRAUD_SERVICE_URL: http://fraud_service:7100
+
+  transaction_coordinator_backup:
+    build: ./backend
+    container_name: payflow_coordinator_backup
+    command: python transaction_coordinator.py --role backup --port 6001 --peer http://transaction_coordinator_primary:6000
+    ports:
+      - "6001:6001"
+    depends_on:
+      - mongodb
+      - kafka
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      WALLET_SERVICE_URL: http://wallet_service:6100
+      FRAUD_SERVICE_URL: http://fraud_service:7100
+
+  wallet_service:
+    build: ./backend
+    container_name: payflow_wallet
+    command: python wallet_service.py
+    ports:
+      - "6100:6100"
+    depends_on:
+      - mongodb
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/
+
+  merchant_service:
+    build: ./backend
+    container_name: payflow_merchant
+    command: python merchant_service.py
+    ports:
+      - "6200:6200"
+    depends_on:
+      - mongodb
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/
+
+  fraud_service:
+    build: ./backend
+    container_name: payflow_fraud
+    command: python fraud_service.py
+    ports:
+      - "7100:7100"
+
+  payment_api_1:
+    build: ./backend
+    container_name: payflow_payment_api_1
+    command: python payment_api.py --port 5001 --name PaymentAPI-1
+    ports:
+      - "5001:5001"
+    depends_on:
+      - transaction_coordinator_primary
+    environment:
+      COORDINATOR_URL: http://transaction_coordinator_primary:6000
+      BACKUP_COORDINATOR_URL: http://transaction_coordinator_backup:6001
+      WALLET_SERVICE_URL: http://wallet_service:6100
+      LOGGING_SERVICE_URL: http://logging_service:7000/
+
+  payment_api_2:
+    build: ./backend
+    container_name: payflow_payment_api_2
+    command: python payment_api.py --port 5002 --name PaymentAPI-2
+    ports:
+      - "5002:5002"
+    depends_on:
+      - transaction_coordinator_primary
+    environment:
+      COORDINATOR_URL: http://transaction_coordinator_primary:6000
+      BACKUP_COORDINATOR_URL: http://transaction_coordinator_backup:6001
+      WALLET_SERVICE_URL: http://wallet_service:6100
+      LOGGING_SERVICE_URL: http://logging_service:7000/
+
+  api_gateway:
+    build: ./backend
+    container_name: payflow_gateway
+    command: python api_gateway.py
+    ports:
+      - "5000:5000"
+    depends_on:
+      - payment_api_1
+      - payment_api_2
+      - redis
+    environment:
+      API_SERVERS: '["http://payment_api_1:5001", "http://payment_api_2:5002"]'
+      REDIS_HOST: redis
+      LOGGING_SERVICE_URL: http://logging_service:7000/
+
+  # --- Workers ---
+
+  notification_worker:
+    build: ./backend
+    container_name: payflow_worker_notification
+    command: python workers/notification_worker.py
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  settlement_worker:
+    build: ./backend
+    container_name: payflow_worker_settlement
+    command: python workers/settlement_worker.py
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MERCHANT_SERVICE_URL: http://merchant_service:6200
+
+  fraud_analytics_worker:
+    build: ./backend
+    container_name: payflow_worker_fraud
+    command: python workers/fraud_analytics_worker.py
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  # --- Frontend ---
+
+  frontend:
+    build: ./frontend
+    container_name: payflow_frontend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:5000
+
+volumes:
+  mongodb_data:

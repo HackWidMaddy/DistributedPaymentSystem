@@ -1,0 +1,87 @@
+# version: '3.8'
+
+services:
+  namenode:
+    # image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    build: ./namenode_image
+    container_name: namenode
+    restart: always
+    ports:
+      - 9870:9870 # Web UI for NameNode
+      - 9000:9000 # HDFS port
+    volumes:
+      - namenode:/hadoop/dfs/name
+      - ./input_data:/input_data
+      - ./mapreduce_scripts:/mapreduce_scripts
+      - ./hadoop_config/mapred-site.xml:/etc/hadoop/mapred-site.xml
+    environment:
+      - CLUSTER_NAME=test
+      - HDFS_CONF_dfs_namenode_datanode_tolerance_base=0 # For single datanode
+    env_file:
+      - ./hadoop.env
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    volumes:
+      - datanode:/hadoop/dfs/data
+      - ./hadoop_config/mapred-site.xml:/etc/hadoop/mapred-site.xml
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - namenode
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    restart: always
+    ports:
+      - 8088:8088 # Web UI for ResourceManager (YARN)
+    volumes:
+      - ./hadoop_config/mapred-site.xml:/etc/hadoop/mapred-site.xml
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - namenode
+
+  nodemanager:
+    build: ./nodemanager_image
+    container_name: nodemanager
+    restart: always
+    volumes:
+      - ./hadoop_config/mapred-site.xml:/etc/hadoop/mapred-site.xml
+    environment:
+      - SERVICE_PRECONDITION=resourcemanager:8088
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - datanode
+      - resourcemanager
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+    container_name: historyserver
+    restart: always
+    ports:
+      - 8188:8188 # Web UI for HistoryServer
+    volumes:
+      - ./hadoop_config/mapred-site.xml:/etc/hadoop/mapred-site.xml
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    depends_on:
+      - namenode
+
+volumes:
+  namenode:
+  datanode:
+
+networks:
+  default:
+    name: hadoop-network

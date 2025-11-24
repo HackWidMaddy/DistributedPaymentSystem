@@ -1,0 +1,23 @@
+version: '3.8'
+
+# This file starts our MongoDB database and connects it to a custom
+# network so all our other (manually run) Python services can find it.
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: vidflow_mongodb
+    ports:
+      - "28000:27017" # Exposes the default MongoDB port to our host machine
+    volumes:
+      - mongo_data:/data/db # Persists data so we don't lose it on restart
+    networks:
+      - vidflow_net
+
+volumes:
+  mongo_data:
+    # This just tells Docker to manage the volume
+
+networks:
+  vidflow_net:
+    driver: bridge # This creates a network we can connect other things to
