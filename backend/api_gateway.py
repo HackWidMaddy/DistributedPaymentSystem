@@ -30,6 +30,7 @@ server_index = 0
 index_lock = threading.Lock()
 
 request_counts = {server: 0 for server in API_SERVERS}
+response_times = {server: [] for server in API_SERVERS} # Store last 100 response times
 count_lock = threading.Lock()
 
 # --- Helper Functions ---
@@ -67,11 +68,13 @@ def get_lb_stats():
         stats = {
             "api_server_1": {
                 "port": 5001,
-                "requests": request_counts.get("http://localhost:5001", 0)
+                "requests": request_counts.get(API_SERVERS[0], 0),
+                "avg_latency": sum(response_times.get(API_SERVERS[0], [])) / len(response_times.get(API_SERVERS[0], [])) if response_times.get(API_SERVERS[0]) else 0
             },
             "api_server_2": {
                 "port": 5002,
-                "requests": request_counts.get("http://localhost:5002", 0)
+                "requests": request_counts.get(API_SERVERS[1], 0),
+                "avg_latency": sum(response_times.get(API_SERVERS[1], [])) / len(response_times.get(API_SERVERS[1], [])) if response_times.get(API_SERVERS[1]) else 0
             }
         }
     return jsonify(stats)
@@ -82,8 +85,13 @@ def get_system_status():
     
     def ping_service(url, service_name):
         try:
-            requests.get(url, timeout=0.5)
-            return "ONLINE"
+            resp = requests.get(url, timeout=1) # Increased timeout for lag
+            if resp.status_code == 200:
+                data = resp.json()
+                if "lag_ms" in data and data["lag_ms"] > 0:
+                    return f"LAGGING ({data['lag_ms']}ms)"
+                return "ONLINE"
+            return "OFFLINE"
         except:
             return "OFFLINE"
             
@@ -106,6 +114,15 @@ def kill_coordinator():
     except:
         return jsonify({"error": "Failed to reach coordinator"}), 500
 
+@app.route('/admin/kill-backup-coordinator', methods=['POST'])
+def kill_backup_coordinator():
+    try:
+        coord_url = os.getenv("BACKUP_COORDINATOR_URL", "http://localhost:6001")
+        requests.post(f"{coord_url}/simulate/kill", timeout=1)
+        return jsonify({"status": "SUCCESS", "message": "Backup Coordinator Killed"})
+    except:
+        return jsonify({"error": "Failed to reach backup coordinator"}), 500
+
 @app.route('/admin/simulate-lag', methods=['POST'])
 def simulate_lag():
     try:
@@ -123,6 +140,54 @@ def reset_system():
         return jsonify({"status": "SUCCESS", "message": "System Reset"})
     except:
         return jsonify({"error": "Failed to reach coordinator"}), 500
+
+# --- Simulated Gateway Cluster (Exp 8) ---
+gateway_nodes = [
+    {"id": "GW-1", "ip": "10.0.0.1", "status": "ONLINE", "role": "LEADER", "load": 45},
+    {"id": "GW-2", "ip": "10.0.0.2", "status": "ONLINE", "role": "FOLLOWER", "load": 12},
+    {"id": "GW-3", "ip": "10.0.0.3", "status": "ONLINE", "role": "FOLLOWER", "load": 8}
+]
+
+@app.route('/admin/gateway-cluster', methods=['GET'])
+def get_gateway_cluster():
+    # Simulate dynamic load changes
+    import random
+    for node in gateway_nodes:
+        if node["status"] == "ONLINE":
+            change = random.randint(-5, 5)
+            node["load"] = max(0, min(100, node["load"] + change))
+            if node["role"] == "LEADER":
+                node["load"] = max(40, min(90, node["load"] + change)) # Leader has more load
+    return jsonify(gateway_nodes)
+
+@app.route('/admin/switch-leader', methods=['POST'])
+def switch_leader():
+    import random
+    # Find current leader and demote
+    current_leader = next((n for n in gateway_nodes if n["role"] == "LEADER"), None)
+    if current_leader:
+        current_leader["role"] = "FOLLOWER"
+    
+    # Pick new leader from ONLINE followers
+    candidates = [n for n in gateway_nodes if n["status"] == "ONLINE" and n != current_leader]
+    if candidates:
+        new_leader = random.choice(candidates)
+        new_leader["role"] = "LEADER"
+        return jsonify({"status": "SUCCESS", "message": f"Leader switched to {new_leader['id']}"})
+    
+    return jsonify({"error": "No available candidates"}), 500
+
+@app.route('/admin/toggle-node', methods=['POST'])
+def toggle_node():
+    node_id = request.json.get('node_id')
+    node = next((n for n in gateway_nodes if n["id"] == node_id), None)
+    if node:
+        node["status"] = "OFFLINE" if node["status"] == "ONLINE" else "ONLINE"
+        if node["status"] == "OFFLINE" and node["role"] == "LEADER":
+            # Auto-elect new leader if leader goes offline
+            switch_leader()
+        return jsonify({"status": "SUCCESS", "node": node})
+    return jsonify({"error": "Node not found"}), 404
 
 # --- Auth Endpoints ---
 
@@ -191,6 +256,8 @@ def gateway(path):
     print(f"[{time.strftime('%H:%M:%S')}] Forwarding {path} to {target_server}")
     logger.log(f"Forwarding {request.method} {path} to {target_server}")
     
+    start_time = time.time()
+    
     # 4. Forward Request
     try:
         # Prepare headers (exclude Host)
@@ -204,6 +271,13 @@ def gateway(path):
             headers=headers,
             timeout=10
         )
+        
+        # Track latency
+        latency = (time.time() - start_time) * 1000 # ms
+        with count_lock:
+            response_times[target_server].append(latency)
+            if len(response_times[target_server]) > 100:
+                response_times[target_server].pop(0)
         
         # Exclude hop-by-hop headers
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']

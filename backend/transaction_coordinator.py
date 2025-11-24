@@ -63,10 +63,11 @@ def heartbeat_loop():
                 # In a real system, we would update a service registry or DNS
         else:
             # Send heartbeat to backup
-            try:
-                requests.post(f"{PEER_URL}/heartbeat", timeout=1)
-            except:
-                pass # Backup might be down, that's fine
+            if IS_ACTIVE:
+                try:
+                    requests.post(f"{PEER_URL}/heartbeat", timeout=1)
+                except:
+                    pass # Backup might be down, that's fine
         time.sleep(2)
 
 threading.Thread(target=heartbeat_loop, daemon=True).start()
@@ -149,7 +150,7 @@ def process_payment(data):
 def health():
     if not IS_ACTIVE:
         return jsonify({"status": "OFFLINE", "role": ROLE}), 503
-    return jsonify({"status": "ONLINE", "role": ROLE})
+    return jsonify({"status": "ONLINE", "role": ROLE, "lag_ms": LAG_MS})
 
 @app.route('/heartbeat', methods=['POST'])
 def heartbeat():

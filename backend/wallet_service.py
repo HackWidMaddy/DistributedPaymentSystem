@@ -32,10 +32,18 @@ def get_wallet(user_id):
     wallet = wallets_col.find_one({"user_id": user_id}, {"_id": 0})
     if not wallet:
         # Create wallet if not exists (for demo simplicity)
-        wallet = {"user_id": user_id, "balance": 0.0, "currency": "INR"}
+        wallet = {"user_id": user_id, "balance": 1000.0, "currency": "INR"}
         wallets_col.insert_one(wallet)
         del wallet["_id"]
     return wallet
+
+def resolve_user_id(identifier):
+    # Check if identifier is an email
+    if "@" in identifier:
+        user = users_col.find_one({"email": identifier})
+        if user:
+            return user['user_id']
+    return identifier
 
 # --- Endpoints ---
 
@@ -56,7 +64,7 @@ def get_history(user_id):
 @app.route('/wallet/debit', methods=['POST'])
 def debit_wallet():
     data = request.json
-    user_id = data['user_id']
+    user_id = resolve_user_id(data['user_id'])
     amount = float(data['amount'])
     transaction_id = data.get('transaction_id', 'unknown')
     
@@ -91,7 +99,7 @@ def debit_wallet():
 @app.route('/wallet/credit', methods=['POST'])
 def credit_wallet():
     data = request.json
-    user_id = data['user_id']
+    user_id = resolve_user_id(data['user_id'])
     amount = float(data['amount'])
     transaction_id = data.get('transaction_id', 'unknown')
     

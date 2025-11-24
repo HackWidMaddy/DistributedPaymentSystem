@@ -9,6 +9,20 @@ services:
       - "28000:27017"
     volumes:
       - mongodb_data:/data/db
+    command: [ "--replSet", "rs0", "--bind_ip_all" ]
+    healthcheck:
+      test: >
+        test $$(echo "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongodb:27017' }] }).ok || rs.status().ok" | mongosh --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+
+  mongo-init:
+    image: mongo:latest
+    restart: "no"
+    depends_on:
+      - mongodb
+    command: >
+      bash -c "sleep 5 && mongosh --host mongodb --eval 'try { rs.initiate({ _id: \"rs0\", members: [{ _id: 0, host: \"mongodb:27017\" }] }) } catch(e) { print(e) }'"
 
   redis:
     image: redis:latest
@@ -151,6 +165,7 @@ services:
       REDIS_HOST: redis
       LOGGING_SERVICE_URL: http://logging_service:7000/
       WALLET_SERVICE_URL: http://wallet_service:6100
+      COORDINATOR_URL: http://transaction_coordinator_primary:6000
 
   # --- Workers ---
 

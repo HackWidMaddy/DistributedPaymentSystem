@@ -28,8 +28,10 @@ PORT = 5000
 def get_coordinator_url():
     # Simple failover logic: try primary, if fails, try backup
     try:
-        requests.get(f"{COORDINATOR_URL}/health", timeout=0.5)
-        return COORDINATOR_URL
+        resp = requests.get(f"{COORDINATOR_URL}/health", timeout=0.5)
+        if resp.status_code == 200:
+            return COORDINATOR_URL
+        return BACKUP_COORDINATOR_URL
     except:
         return BACKUP_COORDINATOR_URL
 
@@ -46,7 +48,7 @@ def initiate_payment():
     receiver_id = data.get('receiver_id')
     amount = data.get('amount')
     
-    if not all([sender_id, receiver_id, amount]):
+    if not sender_id or not receiver_id or amount is None:
         return jsonify({"error": "Missing required fields"}), 400
         
     transaction_id = str(uuid.uuid4())
